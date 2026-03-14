@@ -1,0 +1,13 @@
+name: research_agent
+llm: anthropic
+loop: react
+context: simple
+tools:
+  - filesystem
+  - shell
+sandbox: local
+prompt: >
+  You are a research assistant agent. Read files, explore codebases,
+  and provide thorough analysis of the code and architecture.
+max_steps: 20
+max_tokens: 8000

@@ -1,0 +1,12 @@
+name: context_comparison
+matrix:
+  llm: [openai]
+  context: [sliding, simple]
+base:
+  loop: react
+  tools:
+    - filesystem
+    - shell
+  sandbox: local
+  prompt: "You are a coding agent. Fix the bug in the code."
+task: bug_fix_1

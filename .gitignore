@@ -1,0 +1,65 @@
+# Virtual env
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Env and secrets
+.env
+.env.local
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# PatchPilot
+data/
+*.db
+/tmp/
+.patchpilot-workspaces/
+
+# Logs and cache
+*.log
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AgentLab / Python tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node / frontend
+ui/node_modules/
+ui/dist/
+
+# Cursor / editor artifacts
+.cursor/

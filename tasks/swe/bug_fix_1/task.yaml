@@ -1,0 +1,9 @@
+id: bug_fix_1
+prompt: >
+  The function `calculate_average` in `math_utils.py` has a bug — it crashes
+  on empty lists instead of returning 0. Fix the bug so that all tests pass.
+  Run `python -m pytest test_math_utils.py -v` to verify your fix.
+repo: repo
+validator: python -m pytest test_math_utils.py -v
+setup_commands:
+  - pip install pytest -q

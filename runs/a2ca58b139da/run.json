@@ -1,0 +1,35 @@
+{
+  "id": "a2ca58b139da",
+  "agent_name": "coding_agent",
+  "agent_config": {
+    "name": "coding_agent",
+    "llm": "openai",
+    "loop": "react",
+    "context": "sliding",
+    "tools": [
+      "filesystem",
+      "shell",
+      "repo_search"
+    ],
+    "sandbox": "local",
+    "prompt": "You are a software engineering agent. You can read, write, and search files, and execute shell commands. Solve the given task by editing code and running tests.\n",
+    "memory": null,
+    "max_steps": 30,
+    "max_tokens": 4096
+  },
+  "task_id": null,
+  "status": "failed",
+  "metrics": {
+    "success": null,
+    "steps": 0,
+    "tokens_used": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "runtime_seconds": 0.0,
+    "patch_size": null
+  },
+  "trace": [],
+  "error": "Error code: 401 - {'error': {'message': \"You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY), or as the password field (with blank username) if you're accessing the API from your browser and are prompted for a username and password. You can obtain an API key from https://platform.openai.com/account/api-keys.\", 'type': 'invalid_request_error', 'param': None, 'code': None}}",
+  "created_at": "2026-03-14T08:20:28.482303Z",
+  "completed_at": "2026-03-14T08:20:29.235111Z"
+}

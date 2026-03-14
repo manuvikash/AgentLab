@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentlab"
+version = "0.1.0"
+description = "A modular platform for building, experimenting with, evaluating, and deploying AI agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+dependencies = [
+    "pydantic>=2.0",
+    "click>=8.1",
+    "pyyaml>=6.0",
+    "openai>=1.0",
+    "anthropic>=0.30",
+    "rich>=13.0",
+    "tabulate>=0.9",
+    "docker>=7.0",
+    "python-dotenv>=1.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+lab = "agentlab.cli.main:cli"
+
+[tool.setuptools.packages.find]
+include = ["agentlab*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100

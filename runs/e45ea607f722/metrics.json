@@ -1,0 +1,9 @@
+{
+  "success": null,
+  "steps": 5,
+  "tokens_used": 6347,
+  "input_tokens": 6202,
+  "output_tokens": 145,
+  "runtime_seconds": 47.804,
+  "patch_size": null
+}

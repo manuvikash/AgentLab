@@ -1,0 +1,45 @@
+{
+  "id": "7507aa19dc04",
+  "agent_name": "coding_agent",
+  "agent_config": {
+    "name": "coding_agent",
+    "llm": "openai",
+    "loop": "react",
+    "context": "sliding",
+    "tools": [
+      "filesystem",
+      "shell",
+      "repo_search"
+    ],
+    "sandbox": "local",
+    "prompt": "You are a software engineering agent. You can read, write, and search files, and execute shell commands. Solve the given task by editing code and running tests.\n",
+    "memory": null,
+    "max_steps": 30,
+    "max_tokens": 4096
+  },
+  "task_id": null,
+  "status": "completed",
+  "metrics": {
+    "success": null,
+    "steps": 1,
+    "tokens_used": 342,
+    "input_tokens": 315,
+    "output_tokens": 27,
+    "runtime_seconds": 2.197,
+    "patch_size": null
+  },
+  "trace": [
+    {
+      "step": 1,
+      "thought": "Please provide the specific task you would like me to solve, including any relevant details or code that needs to be edited or tested.",
+      "action": "final_answer",
+      "tool_call": null,
+      "result": "Please provide the specific task you would like me to solve, including any relevant details or code that needs to be edited or tested.",
+      "timestamp": "2026-03-14T08:25:34.772371Z",
+      "token_usage": null
+    }
+  ],
+  "error": null,
+  "created_at": "2026-03-14T08:25:32.575337Z",
+  "completed_at": "2026-03-14T08:25:34.772589Z"
+}
