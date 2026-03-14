@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from agentlab.api.routes import router, set_store
 from agentlab.storage.store import Store
@@ -26,10 +27,22 @@ def create_app(store: Store | None = None) -> FastAPI:
     if store:
         set_store(store)
 
+    # Register API routes first so they take precedence over the SPA catch‑all
     app.include_router(router)
 
     dist_dir = Path(__file__).resolve().parent.parent.parent / "ui" / "dist"
     if dist_dir.exists():
-        app.mount("/", StaticFiles(directory=str(dist_dir), html=True), name="ui")
+        # Serve built SPA assets
+        app.mount("/assets", StaticFiles(directory=str(dist_dir / "assets")), name="ui-assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_catch_all(full_path: str) -> FileResponse:  # type: ignore[valid-type]
+            # Let API routes and docs handle their own paths
+            if full_path.startswith("api") or full_path.startswith("docs") or full_path.startswith("openapi"):
+                raise HTTPException(status_code=404, detail="Not Found")
+            index_file = dist_dir / "index.html"
+            if not index_file.exists():
+                raise HTTPException(status_code=404, detail="UI not built")
+            return FileResponse(index_file)
 
     return app

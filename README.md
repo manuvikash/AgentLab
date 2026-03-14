@@ -61,6 +61,50 @@ lab compare <run_id_1> <run_id_2>
 lab replay <run_id>
 ```
 
+## Web UI
+
+AgentLab includes a full web UI for browsing agents, runs, tasks, experiments, and comparisons.
+
+### Start the UI (server mode)
+
+From the project root (with your virtualenv activated):
+
+```bash
+lab ui
+```
+
+Then open `http://127.0.0.1:8000` in your browser.  
+FastAPI serves both the JSON API under `/api/*` and, if built, the static UI at `/`.
+
+### Develop the UI (hot reload)
+
+In one terminal, start the API server:
+
+```bash
+lab ui
+```
+
+In another terminal, run the Vite dev server from the `ui/` directory:
+
+```bash
+cd ui
+npm install        # first time
+npm run dev
+```
+
+Visit `http://127.0.0.1:5173`. The dev server proxies `/api/*` requests to `http://127.0.0.1:8000`.
+
+### Build the UI for production
+
+To build the React app into static assets:
+
+```bash
+cd ui
+npm run build
+```
+
+This outputs to `ui/dist/`. On the next `lab ui` run, FastAPI will automatically serve `ui/dist/` at `/`.
+
 ## Architecture
 
 ```

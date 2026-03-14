@@ -53,8 +53,15 @@ export default function ComponentsList() {
                     key={`${c.type}-${c.name}`}
                     className={`border rounded-lg p-4 ${typeColors[type] || "border-gray-200 bg-white"}`}
                   >
-                    <p className="font-medium text-gray-900">{c.name}</p>
-                    <p className="text-xs text-gray-500 mt-1 font-mono">{c.class}</p>
+                    <p className="font-medium text-gray-900 truncate" title={c.name}>
+                      {c.name}
+                    </p>
+                    <p
+                      className="text-xs text-gray-500 mt-1 font-mono truncate"
+                      title={c.class}
+                    >
+                      {c.class}
+                    </p>
                   </div>
                 ))}
               </div>
