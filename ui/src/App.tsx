@@ -14,6 +14,7 @@ import TasksList from "./pages/TasksList";
 import TaskDetail from "./pages/TaskDetail";
 import TaskBuilder from "./pages/TaskBuilder";
 import Compare from "./pages/Compare";
+import Playground from "./pages/Playground";
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/tasks/:id/edit" element={<TaskBuilder />} />
         <Route path="/compare" element={<Compare />} />
+        <Route path="/playground" element={<Playground />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

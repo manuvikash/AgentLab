@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 const links = [
   { to: "/", label: "Dashboard", icon: "◆" },
+  { to: "/playground", label: "Playground", icon: "💬" },
   { to: "/agents", label: "Agents", icon: "⚙" },
   { to: "/runs", label: "Runs", icon: "▶" },
   { to: "/experiments", label: "Experiments", icon: "⬡" },

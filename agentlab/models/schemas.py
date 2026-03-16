@@ -164,3 +164,32 @@ class LLMToolCall(BaseModel):
     id: str = Field(default_factory=_new_id)
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Playground conversations
+# ---------------------------------------------------------------------------
+
+
+class ConversationRecord(BaseModel):
+    """Metadata for a single playground conversation thread."""
+
+    id: str = Field(default_factory=_new_id)
+    agent_name: str
+    agent_snapshot: AgentConfig | None = None
+    title: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
+class ConversationMessage(BaseModel):
+    """One message turn inside a playground conversation."""
+
+    id: int | None = None
+    conversation_id: str
+    seq: int
+    role: Literal["user", "assistant"]
+    content: str | None = None
+    # Serialised list of TraceEntry dicts (tool calls, thoughts) for assistant turns.
+    trace: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=_utcnow)

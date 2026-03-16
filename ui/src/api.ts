@@ -46,4 +46,24 @@ export const api = {
     byType: (type: string) => request<Record<string, unknown>[]>(`/components/${type}`),
   },
   compare: (a: string, b: string) => request<Record<string, unknown>>(`/compare/${a}/${b}`),
+  conversations: {
+    list: (agent?: string) =>
+      request<Record<string, unknown>[]>(
+        agent ? `/conversations?agent=${encodeURIComponent(agent)}` : "/conversations"
+      ),
+    get: (id: string) => request<Record<string, unknown>>(`/conversations/${id}`),
+    create: (data: { agent_name: string }) =>
+      request<Record<string, unknown>>("/conversations", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => request(`/conversations/${id}`, { method: "DELETE" }),
+    // Raw fetch for SSE — callers handle the stream themselves
+    sendMessage: (id: string, content: string) =>
+      fetch(`${BASE}/conversations/${id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      }),
+  },
 };
