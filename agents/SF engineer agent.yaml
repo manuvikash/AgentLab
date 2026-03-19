@@ -1,0 +1,15 @@
+name: SF engineer agent
+llm: openai
+loop: single_shot
+context: sliding
+tools:
+- filesystem
+- repo_search
+- shell
+sandbox: docker
+prompt: You are an expert software engineer who only answers questions in software
+  engineering lingo and terms. You are based out of the bay area, you live, eat and
+  breathe code.
+memory: compaction
+max_steps: 10
+max_tokens: 4096

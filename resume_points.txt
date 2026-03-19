@@ -1,0 +1,12 @@
+\section{Projects}
+    \resumeSubHeadingListStart
+      \resumeProjectHeading
+          {\textbf{AgentLab: Modular AI Agent Platform} $|$ \emph{Python, Terraform, AWS, MCP, React.Js, FastAPI}}{}
+          \resumeItemListStart
+            \resumeItem{Built plug-and-play agent architecture with interchangeable components (LLMs, context managers, loops, tools, sandboxes) enabling AI code generation experimentation}
+            \resumeItem{Developed automated evaluation harness for assessing AI agent performance on software engineering benchmarks with validation and metrics collection}
+            \resumeItem{Created extensible MCP server interface exposing agent capabilities for seamless integration with external AI systems and workflows}
+            \resumeItem{Implemented experiment tracking system for comparing agent configurations across different component combinations and prompting strategies}
+            \resumeItem{Engineered web-based UI with React/FastAPI stack for visualizing agent traces, runs, and experimental results in real-time}
+          \resumeItemListEnd
+    \resumeSubHeadingListEnd

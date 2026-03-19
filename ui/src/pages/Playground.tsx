@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api } from "../api";
 
 // ---------------------------------------------------------------------------
@@ -57,6 +59,107 @@ function timeAgo(iso: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ---------------------------------------------------------------------------
+// Markdown renderer
+// ---------------------------------------------------------------------------
+
+function Markdown({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        // Paragraphs
+        p: ({ children }) => (
+          <p className="text-sm text-gray-900 leading-relaxed mb-2 last:mb-0">{children}</p>
+        ),
+        // Headings
+        h1: ({ children }) => (
+          <h1 className="text-base font-bold text-gray-900 mt-3 mb-1">{children}</h1>
+        ),
+        h2: ({ children }) => (
+          <h2 className="text-sm font-bold text-gray-900 mt-3 mb-1">{children}</h2>
+        ),
+        h3: ({ children }) => (
+          <h3 className="text-sm font-semibold text-gray-800 mt-2 mb-1">{children}</h3>
+        ),
+        // Inline code
+        code: ({ className, children, ...props }) => {
+          const isBlock = Boolean(className);
+          if (isBlock) {
+            return (
+              <pre className="bg-gray-900 text-gray-100 rounded-lg px-4 py-3 my-2 overflow-x-auto text-xs font-mono">
+                <code>{children}</code>
+              </pre>
+            );
+          }
+          return (
+            <code
+              className="bg-gray-100 text-indigo-700 rounded px-1 py-0.5 text-xs font-mono"
+              {...props}
+            >
+              {children}
+            </code>
+          );
+        },
+        // Block code wrapper — react-markdown passes `pre` separately
+        pre: ({ children }) => <>{children}</>,
+        // Lists
+        ul: ({ children }) => (
+          <ul className="list-disc list-inside space-y-0.5 text-sm text-gray-900 mb-2 pl-2">
+            {children}
+          </ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="list-decimal list-inside space-y-0.5 text-sm text-gray-900 mb-2 pl-2">
+            {children}
+          </ol>
+        ),
+        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+        // Blockquote
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-4 border-indigo-300 pl-3 my-2 text-gray-600 italic text-sm">
+            {children}
+          </blockquote>
+        ),
+        // Table (GFM)
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-2">
+            <table className="text-xs border-collapse w-full">{children}</table>
+          </div>
+        ),
+        th: ({ children }) => (
+          <th className="border border-gray-300 bg-gray-100 px-2 py-1 text-left font-semibold text-gray-700">
+            {children}
+          </th>
+        ),
+        td: ({ children }) => (
+          <td className="border border-gray-300 px-2 py-1 text-gray-800">{children}</td>
+        ),
+        // Horizontal rule
+        hr: () => <hr className="my-3 border-gray-200" />,
+        // Links
+        a: ({ href, children }) => (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-600 underline hover:text-indigo-800"
+          >
+            {children}
+          </a>
+        ),
+        // Strong / em
+        strong: ({ children }) => (
+          <strong className="font-semibold text-gray-900">{children}</strong>
+        ),
+        em: ({ children }) => <em className="italic">{children}</em>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +222,7 @@ function StreamingBubble({ state }: { state: StreamingState }) {
         )}
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
           {state.finalContent !== null ? (
-            <p className="text-sm text-gray-900 whitespace-pre-wrap">{state.finalContent}</p>
+            <Markdown content={state.finalContent} />
           ) : state.error ? (
             <p className="text-sm text-red-600">{state.error}</p>
           ) : (
@@ -172,7 +275,7 @@ function MessageBubble({ msg }: { msg: ConvMessage }) {
           </div>
         )}
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
-          <p className="text-sm text-gray-900 whitespace-pre-wrap">{msg.content}</p>
+          <Markdown content={msg.content ?? ""} />
         </div>
       </div>
     </div>
