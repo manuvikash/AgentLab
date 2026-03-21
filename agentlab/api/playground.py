@@ -33,6 +33,11 @@ from pydantic import BaseModel
 
 from agentlab.core.component import RuntimeContext, ToolResult
 from agentlab.core.registry import get_registry
+from agentlab.observability.phoenix_tracing import (
+    agent_parent_span,
+    set_span_error,
+    set_span_ok,
+)
 from agentlab.models.schemas import (
     AgentConfig,
     ConversationMessage,
@@ -262,110 +267,127 @@ async def _run_turn(
             "container_id": sandbox.short_id,
         })
 
+    play_attrs: dict[str, str] = {
+        "agentlab.conversation_id": conv_id,
+        "agentlab.agent_name": agent_config.name,
+    }
+    if task_id:
+        play_attrs["agentlab.task_id"] = task_id
+
     try:
-        for step in range(1, agent_config.max_steps + 1):
-                messages = ctx.context_manager.get_messages(
-                    max_tokens=agent_config.max_tokens
-                )
-                response = await ctx.llm.generate(messages, tools=tool_specs or None)
-
-                if not response.tool_calls:
-                    # Final answer
-                    entry = TraceEntry(
-                        step=step,
-                        thought=response.content,
-                        action="final_answer",
-                        result=response.content,
+        with agent_parent_span(
+            "agentlab.playground_turn",
+            input_value=user_content,
+            attributes=play_attrs,
+        ) as otel_span:
+            try:
+                for step in range(1, agent_config.max_steps + 1):
+                    messages = ctx.context_manager.get_messages(
+                        max_tokens=agent_config.max_tokens
                     )
-                    trace_entries.append(entry)
-                    ctx.context_manager.add(
-                        Message(role="assistant", content=response.content or "")
-                    )
-                    yield _sse(
-                        {
-                            "event": "thinking",
-                            "step": step,
-                            "content": response.content or "",
-                        }
-                    )
-                    break
+                    response = await ctx.llm.generate(messages, tools=tool_specs or None)
 
-                # Thinking / tool-requesting step
-                thought = response.content
-                if thought:
-                    yield _sse({"event": "thinking", "step": step, "content": thought})
-
-                ctx.context_manager.add(
-                    Message(
-                        role="assistant",
-                        content=thought or "",
-                        tool_calls=response.tool_calls,
-                    )
-                )
-
-                for tc in response.tool_calls:
-                    yield _sse(
-                        {
-                            "event": "tool_call",
-                            "step": step,
-                            "tool": tc.name,
-                            "args": tc.arguments,
-                        }
-                    )
-
-                    tool_impl = tools_map.get(tc.name)
-                    if tool_impl is None:
-                        result = ToolResult(
-                            output=f"Error: unknown tool '{tc.name}'", success=False
+                    if not response.tool_calls:
+                        # Final answer
+                        entry = TraceEntry(
+                            step=step,
+                            thought=response.content,
+                            action="final_answer",
+                            result=response.content,
                         )
-                    else:
-                        try:
-                            result = await tool_impl.execute(
-                                sandbox=sandbox, **tc.arguments
-                            )
-                        except Exception as exc:
-                            result = ToolResult(output=f"Error: {exc}", success=False)
+                        trace_entries.append(entry)
+                        ctx.context_manager.add(
+                            Message(role="assistant", content=response.content or "")
+                        )
+                        yield _sse(
+                            {
+                                "event": "thinking",
+                                "step": step,
+                                "content": response.content or "",
+                            }
+                        )
+                        break
 
-                    entry = TraceEntry(
-                        step=step,
-                        thought=thought,
-                        action=f"tool:{tc.name}",
-                        tool_call=ToolCallRecord(
-                            tool=tc.name,
-                            args=tc.arguments,
-                            result=result.output,
-                        ),
-                        result=result.output,
-                    )
-                    trace_entries.append(entry)
-
-                    yield _sse(
-                        {
-                            "event": "tool_result",
-                            "step": step,
-                            "tool": tc.name,
-                            "result": result.output,
-                        }
-                    )
+                    # Thinking / tool-requesting step
+                    thought = response.content
+                    if thought:
+                        yield _sse({"event": "thinking", "step": step, "content": thought})
 
                     ctx.context_manager.add(
                         Message(
-                            role="tool",
-                            content=result.output,
-                            tool_call_id=tc.id,
-                            name=tc.name,
+                            role="assistant",
+                            content=thought or "",
+                            tool_calls=response.tool_calls,
                         )
                     )
 
-    except CancelledError:
-        yield _sse({"event": "error", "message": "Request cancelled"})
-        yield _sse({"event": "done"})
-        return
-    except Exception as exc:
-        logger.exception("Playground agent turn failed")
-        yield _sse({"event": "error", "message": str(exc)})
-        yield _sse({"event": "done"})
-        return
+                    for tc in response.tool_calls:
+                        yield _sse(
+                            {
+                                "event": "tool_call",
+                                "step": step,
+                                "tool": tc.name,
+                                "args": tc.arguments,
+                            }
+                        )
+
+                        tool_impl = tools_map.get(tc.name)
+                        if tool_impl is None:
+                            result = ToolResult(
+                                output=f"Error: unknown tool '{tc.name}'", success=False
+                            )
+                        else:
+                            try:
+                                result = await tool_impl.execute(
+                                    sandbox=sandbox, **tc.arguments
+                                )
+                            except Exception as exc:
+                                result = ToolResult(output=f"Error: {exc}", success=False)
+
+                        entry = TraceEntry(
+                            step=step,
+                            thought=thought,
+                            action=f"tool:{tc.name}",
+                            tool_call=ToolCallRecord(
+                                tool=tc.name,
+                                args=tc.arguments,
+                                result=result.output,
+                            ),
+                            result=result.output,
+                        )
+                        trace_entries.append(entry)
+
+                        yield _sse(
+                            {
+                                "event": "tool_result",
+                                "step": step,
+                                "tool": tc.name,
+                                "result": result.output,
+                            }
+                        )
+
+                        ctx.context_manager.add(
+                            Message(
+                                role="tool",
+                                content=result.output,
+                                tool_call_id=tc.id,
+                                name=tc.name,
+                            )
+                        )
+
+                final_text = trace_entries[-1].result if trace_entries else ""
+                set_span_ok(otel_span, final_text or "")
+            except CancelledError as exc:
+                set_span_error(otel_span, exc)
+                yield _sse({"event": "error", "message": "Request cancelled"})
+                yield _sse({"event": "done"})
+                return
+            except Exception as exc:
+                set_span_error(otel_span, exc)
+                logger.exception("Playground agent turn failed")
+                yield _sse({"event": "error", "message": str(exc)})
+                yield _sse({"event": "done"})
+                return
     finally:
         await sandbox.stop()
         if is_docker:

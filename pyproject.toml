@@ -34,6 +34,11 @@ vector = [
     "chromadb>=0.5",
     "sentence-transformers>=2.2",
 ]
+phoenix = [
+    "arize-phoenix>=4.0",
+    "arize-phoenix-otel>=0.13",
+    "openinference-instrumentation-openai>=0.1",
+]
 
 [project.scripts]
 lab = "agentlab.cli.main:cli"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -16,11 +17,19 @@ from agentlab.storage.conversation_store import ConversationStore
 from agentlab.storage.store import Store
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    from agentlab.observability.phoenix_tracing import ensure_phoenix_tracing
+
+    ensure_phoenix_tracing()
+    yield
+
+
 def create_app(
     store: Store | None = None,
     conv_store: ConversationStore | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="AgentLab", version="0.1.0")
+    app = FastAPI(title="AgentLab", version="0.1.0", lifespan=_lifespan)
 
     app.add_middleware(
         CORSMiddleware,

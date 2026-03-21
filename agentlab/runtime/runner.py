@@ -16,6 +16,11 @@ from agentlab.models.schemas import (
     RunRecord,
     TraceEntry,
 )
+from agentlab.observability.phoenix_tracing import (
+    agent_parent_span,
+    set_span_error,
+    set_span_ok,
+)
 from agentlab.storage.store import Store
 
 logger = logging.getLogger(__name__)
@@ -90,37 +95,57 @@ class AgentRunner:
             max_tokens=config.max_tokens,
         )
 
-        try:
-            async with sandbox:
-                prompt = task_prompt or config.prompt or "No task specified."
-                result = await loop.run(ctx, prompt)
+        prompt = task_prompt or config.prompt or "No task specified."
+        span_attrs: dict[str, str] = {
+            "agentlab.run_id": run.id,
+            "agentlab.agent_name": config.name,
+            "agentlab.loop": config.loop,
+        }
+        if task_id:
+            span_attrs["agentlab.task_id"] = task_id
 
-            elapsed = time.monotonic() - start
+        with agent_parent_span(
+            "agentlab.run",
+            input_value=prompt,
+            attributes=span_attrs,
+        ) as otel_span:
+            try:
+                async with sandbox:
+                    result = await loop.run(ctx, prompt)
 
-            trace_entries = []
-            for raw in result.trace:
-                if isinstance(raw, dict):
-                    trace_entries.append(TraceEntry(**raw))
-                elif isinstance(raw, TraceEntry):
-                    trace_entries.append(raw)
+                elapsed = time.monotonic() - start
 
-            run.status = "completed"
-            run.trace = trace_entries
-            run.metrics = Metrics(
-                success=result.success,
-                steps=result.steps,
-                tokens_used=result.total_input_tokens + result.total_output_tokens,
-                input_tokens=result.total_input_tokens,
-                output_tokens=result.total_output_tokens,
-                runtime_seconds=round(elapsed, 3),
-            )
-            run.completed_at = datetime.now(timezone.utc)
+                trace_entries = []
+                for raw in result.trace:
+                    if isinstance(raw, dict):
+                        trace_entries.append(TraceEntry(**raw))
+                    elif isinstance(raw, TraceEntry):
+                        trace_entries.append(raw)
 
-        except Exception as exc:
-            logger.exception("Agent run failed")
-            run.status = "failed"
-            run.error = str(exc)
-            run.completed_at = datetime.now(timezone.utc)
+                run.status = "completed"
+                run.trace = trace_entries
+                run.metrics = Metrics(
+                    success=result.success,
+                    steps=result.steps,
+                    tokens_used=result.total_input_tokens + result.total_output_tokens,
+                    input_tokens=result.total_input_tokens,
+                    output_tokens=result.total_output_tokens,
+                    runtime_seconds=round(elapsed, 3),
+                )
+                run.completed_at = datetime.now(timezone.utc)
+
+                out = ""
+                if trace_entries:
+                    last = trace_entries[-1]
+                    out = (last.result or last.thought or "") or ""
+                set_span_ok(otel_span, out)
+
+            except Exception as exc:
+                set_span_error(otel_span, exc)
+                logger.exception("Agent run failed")
+                run.status = "failed"
+                run.error = str(exc)
+                run.completed_at = datetime.now(timezone.utc)
 
         self._store.save_run(run)
         logger.info(

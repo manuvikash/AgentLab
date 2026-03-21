@@ -15,6 +15,7 @@ from rich.table import Table
 
 import agentlab.components  # noqa: F401 — trigger auto-registration
 from agentlab.core.registry import get_registry
+from agentlab.observability.phoenix_tracing import ensure_phoenix_tracing
 from agentlab.storage.store import Store
 
 console = Console()
@@ -95,6 +96,7 @@ def run_agent(agent_name: str, task: str | None, prompt: str | None, workdir: st
     from agentlab.runtime.runner import AgentRunner
 
     store = _get_store()
+    ensure_phoenix_tracing()
 
     try:
         config = store.load_agent(agent_name)
@@ -314,6 +316,7 @@ def experiment_run(config_path: str) -> None:
     from agentlab.models.schemas import ExperimentConfig
 
     store = _get_store()
+    ensure_phoenix_tracing()
 
     with open(config_path, encoding="utf-8") as f:
         raw = yaml.safe_load(f)
@@ -420,6 +423,7 @@ def eval_agent(agent_name: str, task: str) -> None:
     from agentlab.evaluation.harness import EvalHarness
 
     store = _get_store()
+    ensure_phoenix_tracing()
 
     try:
         config = store.load_agent(agent_name)

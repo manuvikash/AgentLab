@@ -61,6 +61,17 @@ lab compare <run_id_1> <run_id_2>
 lab replay <run_id>
 ```
 
+## Observability (Phoenix)
+
+To trace LLM calls and group each agent run under an OpenInference **AGENT** span in [Arize Phoenix](https://arize.com/docs/phoenix), use a **self-hosted** Phoenix instance ([self-hosting guide](https://arize.com/docs/phoenix/self-hosting)), then:
+
+1. Install the optional extra: `pip install -e ".[phoenix]"`
+2. Set environment variables (see `example.env`):
+   - `AGENTLAB_PHOENIX_TRACING=1`
+   - `PHOENIX_COLLECTOR_ENDPOINT` — your Phoenix OTLP endpoint (often `http://localhost:6006` for local Phoenix)
+
+Tracing is initialized when you run `lab ui`, or when you run `lab run`, `lab experiment run`, or `lab eval` from the CLI. Open the Phoenix UI to browse traces.
+
 ## Web UI
 
 AgentLab includes a full web UI for browsing agents, runs, tasks, experiments, and comparisons.
