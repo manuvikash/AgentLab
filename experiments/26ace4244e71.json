@@ -1,0 +1,39 @@
+{
+  "id": "26ace4244e71",
+  "name": "test2",
+  "config": {
+    "name": "test2",
+    "matrix": {
+      "llm": [
+        "openai"
+      ],
+      "loop": [
+        "ralph"
+      ],
+      "context": [
+        "simple"
+      ]
+    },
+    "base": {
+      "llm": "openai",
+      "loop": "react",
+      "context": "simple",
+      "tools": [
+        "filesystem",
+        "repo_search",
+        "shell"
+      ],
+      "sandbox": "docker"
+    },
+    "task": "analytics_pipeline",
+    "tasks": [
+      "analytics_pipeline"
+    ]
+  },
+  "run_ids": [
+    "178e2237fe41"
+  ],
+  "status": "completed",
+  "created_at": "2026-03-19T01:36:05.598355Z",
+  "completed_at": "2026-03-19T01:36:09.151444Z"
+}

@@ -51,11 +51,30 @@ class AgentRunner:
 
         start = time.monotonic()
 
+        # Resolve the sandbox working directory from the task's repo field so
+        # the agent lands directly in the directory that contains the task files.
+        sandbox_overrides = dict(overrides)
+        if task_id and "workdir" not in sandbox_overrides:
+            try:
+                task_cfg = self._store.load_task(task_id)
+                if task_cfg.repo:
+                    task_dir = self._store.get_task_dir(task_id)
+                    repo_path = (task_dir / task_cfg.repo).resolve()
+                    if repo_path.is_dir():
+                        sandbox_overrides["workdir"] = str(repo_path)
+                        logger.info(
+                            "Run %s: sandbox workdir set to %s",
+                            run.id,
+                            repo_path,
+                        )
+            except FileNotFoundError:
+                pass
+
         llm = self._registry.create("llm", config.llm)
         loop = self._registry.create("loop", config.loop)
         context_mgr = self._registry.create("context", config.context)
         tools = [self._registry.create("tool", t) for t in config.tools]
-        sandbox = self._registry.create("sandbox", config.sandbox, **overrides)
+        sandbox = self._registry.create("sandbox", config.sandbox, **sandbox_overrides)
         memory = (
             self._registry.create("memory", config.memory) if config.memory else None
         )

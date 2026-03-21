@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+logger = logging.getLogger(__name__)
+
 import agentlab.components  # noqa: F401
 from agentlab.core.registry import get_registry
 from agentlab.experiment.comparison import compare_runs
+from agentlab.experiment.engine import ExperimentEngine
 from agentlab.models.schemas import (
     AgentConfig,
     ExperimentConfig,
@@ -141,6 +146,32 @@ def create_experiment(config: ExperimentConfig):
     record = ExperimentRecord(name=config.name, config=config)
     get_store().save_experiment(record)
     return record.model_dump()
+
+
+@router.post("/experiments/{experiment_id}/run", status_code=202)
+async def run_experiment(experiment_id: str):
+    """Trigger execution of a saved experiment in the background."""
+    store = get_store()
+    try:
+        exp = store.load_experiment(experiment_id)
+    except FileNotFoundError:
+        raise HTTPException(404, f"Experiment '{experiment_id}' not found")
+
+    if exp.status == "running":
+        raise HTTPException(409, "Experiment is already running")
+
+    if not exp.config:
+        raise HTTPException(400, "Experiment has no configuration stored")
+
+    async def _bg():
+        engine = ExperimentEngine(store=store)
+        try:
+            await engine.run_by_id(experiment_id)
+        except Exception:
+            logger.exception("Background experiment run failed: %s", experiment_id)
+
+    asyncio.create_task(_bg())
+    return {"id": experiment_id, "status": "running"}
 
 
 @router.delete("/experiments/{experiment_id}", status_code=204)

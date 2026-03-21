@@ -1,0 +1,21 @@
+id: analytics_pipeline
+prompt: >
+  The `DataAnalytics` class in `analytics.py` is a small in-memory analytics
+  library. It has exactly 4 bugs spread across different methods — each one is
+  a plausible mistake a developer could make.
+
+  The test suite in `test_analytics.py` covers all four bugs. Your goal is to
+  make every test pass.
+
+  Hints:
+  - One bug involves a statistical formula that is subtly wrong.
+  - One bug returns the wrong part of a data structure.
+  - One bug uses the wrong comparison operator.
+  - One bug accumulates results incorrectly.
+
+  Run `python -m pytest test_analytics.py -v` to see which tests fail and to
+  verify your fixes. Fix all failing tests without modifying `test_analytics.py`.
+repo: repo
+validator: python -m pytest test_analytics.py -v
+setup_commands:
+  - pip install pytest -q

@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     id              TEXT PRIMARY KEY,
     agent_name      TEXT NOT NULL,
     agent_snapshot  TEXT,
+    task_id         TEXT,
     title           TEXT,
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
@@ -96,6 +97,14 @@ class ConversationStore:
     def _init(self) -> None:
         with self._connect() as conn:
             conn.executescript(_DDL)
+            # Migration: add task_id if missing (existing DBs)
+            try:
+                cursor = conn.execute("PRAGMA table_info(conversations)")
+                columns = [row[1] for row in cursor.fetchall()]
+                if "task_id" not in columns:
+                    conn.execute("ALTER TABLE conversations ADD COLUMN task_id TEXT")
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Conversations
@@ -106,9 +115,9 @@ class ConversationStore:
         snapshot = record.agent_snapshot.model_dump_json() if record.agent_snapshot else None
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO conversations (id, agent_name, agent_snapshot, title, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (record.id, record.agent_name, snapshot, record.title, now, now),
+                "INSERT INTO conversations (id, agent_name, agent_snapshot, task_id, title, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (record.id, record.agent_name, snapshot, record.task_id, record.title, now, now),
             )
         record.created_at = datetime.fromisoformat(now)
         record.updated_at = record.created_at
@@ -198,10 +207,12 @@ class ConversationStore:
                 snapshot = AgentConfig.model_validate_json(row["agent_snapshot"])
             except Exception:
                 pass
+        task_id = row["task_id"] if "task_id" in row.keys() else None
         return ConversationRecord(
             id=row["id"],
             agent_name=row["agent_name"],
             agent_snapshot=snapshot,
+            task_id=task_id,
             title=row["title"],
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),

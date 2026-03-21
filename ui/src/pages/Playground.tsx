@@ -10,6 +10,7 @@ import { api } from "../api";
 interface ConvRecord {
   id: string;
   agent_name: string;
+  task_id?: string | null;
   title: string | null;
   created_at: string;
   updated_at: string;
@@ -41,10 +42,17 @@ interface SSEStep {
   result?: string;
 }
 
+interface SandboxStatus {
+  status: "starting" | "ready" | "stopped";
+  image?: string;
+  container_id?: string;
+}
+
 interface StreamingState {
   steps: SSEStep[];
   finalContent: string | null;
   error: string | null;
+  sandbox: SandboxStatus | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +171,60 @@ function Markdown({ content }: { content: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Docker status badge
+// ---------------------------------------------------------------------------
+
+function DockerBadge({ sandbox }: { sandbox: SandboxStatus }) {
+  if (sandbox.status === "starting") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mb-2">
+        <span className="w-3 h-3 border-2 border-sky-500 border-t-transparent rounded-full animate-spin shrink-0" />
+        <span>
+          Starting Docker container
+          {sandbox.image && (
+            <> — <code className="font-mono text-sky-600">{sandbox.image}</code></>
+          )}
+          …
+        </span>
+      </div>
+    );
+  }
+
+  if (sandbox.status === "ready") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-2">
+        <span className="text-base leading-none">🐳</span>
+        <span>
+          Container running
+          {sandbox.image && (
+            <> — <code className="font-mono">{sandbox.image}</code></>
+          )}
+          {sandbox.container_id && (
+            <span className="ml-1.5 font-mono text-emerald-500">{sandbox.container_id}</span>
+          )}
+        </span>
+      </div>
+    );
+  }
+
+  // stopped — show a muted "done" state so the badge doesn't abruptly vanish
+  return (
+    <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mb-2">
+      <span className="text-base leading-none">🐳</span>
+      <span>
+        Container stopped
+        {sandbox.image && (
+          <> — <code className="font-mono text-gray-400">{sandbox.image}</code></>
+        )}
+        {sandbox.container_id && (
+          <span className="ml-1.5 font-mono">{sandbox.container_id}</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
@@ -213,6 +275,7 @@ function StreamingBubble({ state }: { state: StreamingState }) {
         A
       </div>
       <div className="flex-1 max-w-2xl">
+        {state.sandbox && <DockerBadge sandbox={state.sandbox} />}
         {toolPairs.length > 0 && (
           <div className="mb-2">
             {toolPairs.map((s, i) => (
@@ -295,13 +358,21 @@ export default function Playground() {
   const [streaming, setStreaming] = useState(false);
   const [streamState, setStreamState] = useState<StreamingState | null>(null);
   const [newAgentName, setNewAgentName] = useState("");
+  const [newTaskId, setNewTaskId] = useState("");
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [taskOptions, setTaskOptions] = useState<{ value: string; label: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load agents + conversations on mount
+  // Load agents, tasks, and conversations on mount
   useEffect(() => {
     api.agents.list().then((res) => setAgents(res as { name: string }[])).catch(() => {});
+    api.tasks
+      .list()
+      .then((res) =>
+        setTaskOptions((res as { id: string }[]).map((t) => ({ value: t.id, label: t.id })))
+      )
+      .catch(() => {});
     loadConversations();
   }, []);
 
@@ -334,10 +405,13 @@ export default function Playground() {
     const name = newAgentName.trim();
     if (!name) return;
     try {
-      const conv = (await api.conversations.create({ agent_name: name })) as unknown as ConvRecord;
+      const payload: { agent_name: string; task_id?: string | null } = { agent_name: name };
+      if (newTaskId.trim()) payload.task_id = newTaskId.trim();
+      const conv = (await api.conversations.create(payload)) as unknown as ConvRecord;
       setConversations((prev) => [conv, ...prev]);
       setShowAgentPicker(false);
       setNewAgentName("");
+      setNewTaskId("");
       await openConversation(conv.id);
     } catch (e) {
       alert(String(e));
@@ -359,7 +433,7 @@ export default function Playground() {
     const text = input.trim();
     setInput("");
     setStreaming(true);
-    setStreamState({ steps: [], finalContent: null, error: null });
+    setStreamState({ steps: [], finalContent: null, error: null, sandbox: null });
 
     // Optimistic user bubble
     const optimisticUser: ConvMessage = {
@@ -409,7 +483,32 @@ export default function Playground() {
 
           const eventType = evt.event as string;
 
-          if (eventType === "thinking") {
+          if (eventType === "sandbox_start") {
+            setStreamState((prev) =>
+              prev
+                ? { ...prev, sandbox: { status: "starting", image: evt.image as string } }
+                : prev
+            );
+          } else if (eventType === "sandbox_ready") {
+            setStreamState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    sandbox: {
+                      status: "ready",
+                      image: evt.image as string,
+                      container_id: evt.container_id as string,
+                    },
+                  }
+                : prev
+            );
+          } else if (eventType === "sandbox_stop") {
+            setStreamState((prev) =>
+              prev && prev.sandbox
+                ? { ...prev, sandbox: { ...prev.sandbox, status: "stopped" } }
+                : prev
+            );
+          } else if (eventType === "thinking") {
             // No-op visually while streaming — final content replaces this
           } else if (eventType === "tool_call") {
             setStreamState((prev) =>
@@ -466,7 +565,7 @@ export default function Playground() {
       }
     } catch (err) {
       setStreamState((prev) =>
-        prev ? { ...prev, error: String(err), finalContent: "" } : prev
+        prev ? { ...prev, error: String(err), finalContent: "", sandbox: null } : prev
       );
     } finally {
       setStreaming(false);
@@ -506,6 +605,19 @@ export default function Playground() {
                 {agents.map((a) => (
                   <option key={a.name} value={a.name}>
                     {a.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={newTaskId}
+                onChange={(e) => setNewTaskId(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-indigo-400 outline-none"
+                title="Optional: bind sandbox to a task repo (filesystem/shell tools will see task files)"
+              >
+                <option value="">No task (generic chat)</option>
+                {taskOptions.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
                   </option>
                 ))}
               </select>
@@ -577,6 +689,12 @@ export default function Playground() {
                 </p>
                 <p className="text-xs text-gray-400">
                   Agent: <span className="text-indigo-600">{activeConv.agent_name}</span>
+                  {activeConv.task_id && (
+                    <>
+                      {" · "}
+                      Task: <span className="text-amber-600">{activeConv.task_id}</span>
+                    </>
+                  )}
                 </p>
               </div>
             </>

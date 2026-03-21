@@ -31,7 +31,8 @@ export const api = {
   experiments: {
     list: () => request<Record<string, unknown>[]>("/experiments"),
     get: (id: string) => request<Record<string, unknown>>(`/experiments/${id}`),
-    create: (data: unknown) => request("/experiments", { method: "POST", body: JSON.stringify(data) }),
+    create: (data: unknown) => request<Record<string, unknown>>("/experiments", { method: "POST", body: JSON.stringify(data) }),
+    run: (id: string) => request<Record<string, unknown>>(`/experiments/${id}/run`, { method: "POST" }),
     delete: (id: string) => request(`/experiments/${id}`, { method: "DELETE" }),
   },
   tasks: {
@@ -52,7 +53,7 @@ export const api = {
         agent ? `/conversations?agent=${encodeURIComponent(agent)}` : "/conversations"
       ),
     get: (id: string) => request<Record<string, unknown>>(`/conversations/${id}`),
-    create: (data: { agent_name: string }) =>
+    create: (data: { agent_name: string; task_id?: string | null }) =>
       request<Record<string, unknown>>("/conversations", {
         method: "POST",
         body: JSON.stringify(data),

@@ -29,8 +29,21 @@ class DockerSandbox(BaseSandbox):
         self._container_workdir = "/workspace"
         self._container_id: str | None = None
 
+    @property
+    def container_id(self) -> str | None:
+        return self._container_id
+
+    @property
+    def short_id(self) -> str | None:
+        return self._container_id[:12] if self._container_id else None
+
     async def start(self) -> None:
         self._host_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(
+            "Docker sandbox: pulling/starting image=%s workdir=%s",
+            self._image,
+            self._host_dir,
+        )
         proc = await asyncio.create_subprocess_exec(
             "docker",
             "run",
@@ -48,19 +61,28 @@ class DockerSandbox(BaseSandbox):
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            raise RuntimeError(f"Failed to start Docker container: {stderr.decode()}")
+            err = stderr.decode().strip()
+            logger.error("Docker sandbox: failed to start container — %s", err)
+            raise RuntimeError(f"Failed to start Docker container: {err}")
         self._container_id = stdout.decode().strip()
-        logger.info("Started Docker container %s", self._container_id[:12])
+        logger.info(
+            "Docker sandbox: container READY  id=%s  image=%s  mount=%s→%s",
+            self.short_id,
+            self._image,
+            self._host_dir,
+            self._container_workdir,
+        )
 
     async def stop(self) -> None:
         if self._container_id:
+            logger.info("Docker sandbox: stopping container id=%s", self.short_id)
             proc = await asyncio.create_subprocess_exec(
                 "docker", "kill", self._container_id,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             await proc.communicate()
-            logger.info("Stopped Docker container %s", self._container_id[:12])
+            logger.info("Docker sandbox: container STOPPED id=%s", self.short_id)
             self._container_id = None
 
     async def execute(
@@ -69,6 +91,11 @@ class DockerSandbox(BaseSandbox):
         if not self._container_id:
             raise RuntimeError("Container not started")
 
+        logger.debug(
+            "Docker exec [%s]: %s",
+            self.short_id,
+            command[:120] + ("…" if len(command) > 120 else ""),
+        )
         try:
             proc = await asyncio.create_subprocess_exec(
                 "docker",
@@ -83,12 +110,21 @@ class DockerSandbox(BaseSandbox):
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=timeout or 60
             )
-            return ExecutionResult(
+            result = ExecutionResult(
                 exit_code=proc.returncode or 0,
                 stdout=stdout.decode(errors="replace"),
                 stderr=stderr.decode(errors="replace"),
             )
+            logger.debug(
+                "Docker exec [%s] exit=%s stdout=%d bytes stderr=%d bytes",
+                self.short_id,
+                result.exit_code,
+                len(result.stdout),
+                len(result.stderr),
+            )
+            return result
         except asyncio.TimeoutError:
+            logger.warning("Docker exec [%s] TIMED OUT: %s", self.short_id, command[:80])
             return ExecutionResult(exit_code=-1, stdout="", stderr="Command timed out")
 
     async def read_file(self, path: str) -> str:

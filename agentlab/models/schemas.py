@@ -177,6 +177,7 @@ class ConversationRecord(BaseModel):
     id: str = Field(default_factory=_new_id)
     agent_name: str
     agent_snapshot: AgentConfig | None = None
+    task_id: str | None = None
     title: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)

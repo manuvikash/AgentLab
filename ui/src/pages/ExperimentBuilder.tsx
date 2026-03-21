@@ -12,6 +12,9 @@ export default function ExperimentBuilder() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [matrix, setMatrix] = useState<MatrixRow[]>([{ type: "llm", values: [] }]);
+  const [baseLlm, setBaseLlm] = useState("openai");
+  const [baseLoop, setBaseLoop] = useState("react");
+  const [baseContext, setBaseContext] = useState("simple");
   const [tools, setTools] = useState<string[]>([]);
   const [sandbox, setSandbox] = useState("local");
   const [taskId, setTaskId] = useState("");
@@ -57,12 +60,14 @@ export default function ExperimentBuilder() {
     const payload = {
       name,
       matrix: matrixObj,
-      base: { tools, sandbox },
+      base: { llm: baseLlm, loop: baseLoop, context: baseContext, tools, sandbox },
       task: taskId || null,
       tasks: taskId ? [taskId] : [],
     };
     try {
-      const result = await api.experiments.create(payload) as Record<string, unknown>;
+      const result = await api.experiments.create(payload);
+      // Immediately kick off the run so it doesn't sit in "pending"
+      await api.experiments.run(String(result.id));
       navigate(`/experiments/${result.id}`);
     } catch (e) {
       alert(String(e));
@@ -136,6 +141,35 @@ export default function ExperimentBuilder() {
             <button onClick={addMatrixRow} className="text-sm text-indigo-600 hover:underline">
               + Add dimension
             </button>
+          </div>
+        </div>
+
+        <div className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            Base defaults (used for dimensions not in the matrix)
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <FormField
+              label="LLM"
+              type="select"
+              value={baseLlm}
+              onChange={setBaseLlm}
+              options={(componentOptions.llm || ["openai"]).map((v) => ({ value: v, label: v }))}
+            />
+            <FormField
+              label="Loop"
+              type="select"
+              value={baseLoop}
+              onChange={setBaseLoop}
+              options={(componentOptions.loop || ["react"]).map((v) => ({ value: v, label: v }))}
+            />
+            <FormField
+              label="Context"
+              type="select"
+              value={baseContext}
+              onChange={setBaseContext}
+              options={(componentOptions.context || ["simple"]).map((v) => ({ value: v, label: v }))}
+            />
           </div>
         </div>
 

@@ -26,6 +26,7 @@ from asyncio import CancelledError
 from typing import AsyncGenerator
 
 import agentlab.components  # noqa: F401 — trigger auto-registration
+from agentlab.components.sandboxes.docker_sandbox import DockerSandbox
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -69,6 +70,7 @@ def set_conv_store(store: ConversationStore) -> None:
 
 class CreateConversationRequest(BaseModel):
     agent_name: str
+    task_id: str | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -97,6 +99,7 @@ def create_conversation(req: CreateConversationRequest):
     record = ConversationRecord(
         agent_name=req.agent_name,
         agent_snapshot=agent_config,
+        task_id=req.task_id,
     )
     get_conv_store().create_conversation(record)
     return record.model_dump()
@@ -136,7 +139,10 @@ async def send_message(conv_id: str, req: SendMessageRequest):
     user_seq = store.next_seq(conv_id)
 
     return StreamingResponse(
-        _run_turn(conv_id, req.content, conv.agent_snapshot, history, user_seq, store),
+        _run_turn(
+            conv_id, req.content, conv.agent_snapshot, history, user_seq, store,
+            task_id=conv.task_id,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -161,6 +167,7 @@ async def _run_turn(
     history: list[ConversationMessage],
     user_seq: int,
     store: ConversationStore,
+    task_id: str | None = None,
 ) -> AsyncGenerator[str, None]:
     # 1. Persist the user message immediately
     user_msg = ConversationMessage(
@@ -178,11 +185,25 @@ async def _run_turn(
 
     # 2. Resolve agent components
     registry = get_registry()
+    sandbox_kw: dict[str, object] = {}
+    if task_id:
+        try:
+            from agentlab.api.routes import get_store
+            task_store = get_store()
+            task_cfg = task_store.load_task(task_id)
+            if task_cfg.repo:
+                task_dir = task_store.get_task_dir(task_id)
+                repo_path = (task_dir / task_cfg.repo).resolve()
+                if repo_path.is_dir():
+                    sandbox_kw["workdir"] = str(repo_path)
+                    logger.info("Playground: sandbox workdir set to %s (task=%s)", repo_path, task_id)
+        except FileNotFoundError:
+            pass
     try:
         llm = registry.create("llm", agent_config.llm)
         context_mgr = registry.create("context", agent_config.context)
         tools_list = [registry.create("tool", t) for t in agent_config.tools]
-        sandbox = registry.create("sandbox", agent_config.sandbox)
+        sandbox = registry.create("sandbox", agent_config.sandbox, **sandbox_kw)
         memory = (
             registry.create("memory", agent_config.memory)
             if agent_config.memory
@@ -217,10 +238,32 @@ async def _run_turn(
     tools_map = ctx.tools
     trace_entries: list[TraceEntry] = []
 
-    # 4. Run the ReAct loop, yielding SSE events at each step
+    # 4. Start sandbox with SSE lifecycle events, then run the ReAct loop
+    is_docker = isinstance(sandbox, DockerSandbox)
+
+    if is_docker:
+        yield _sse({
+            "event": "sandbox_start",
+            "image": sandbox._image,
+        })
+
     try:
-        async with sandbox:
-            for step in range(1, agent_config.max_steps + 1):
+        await sandbox.start()
+    except Exception as exc:
+        logger.exception("Sandbox failed to start")
+        yield _sse({"event": "error", "message": f"Sandbox failed to start: {exc}"})
+        yield _sse({"event": "done"})
+        return
+
+    if is_docker:
+        yield _sse({
+            "event": "sandbox_ready",
+            "image": sandbox._image,
+            "container_id": sandbox.short_id,
+        })
+
+    try:
+        for step in range(1, agent_config.max_steps + 1):
                 messages = ctx.context_manager.get_messages(
                     max_tokens=agent_config.max_tokens
                 )
@@ -323,6 +366,10 @@ async def _run_turn(
         yield _sse({"event": "error", "message": str(exc)})
         yield _sse({"event": "done"})
         return
+    finally:
+        await sandbox.stop()
+        if is_docker:
+            yield _sse({"event": "sandbox_stop"})
 
     # 5. Persist the assistant message with full trace
     final_content = trace_entries[-1].result if trace_entries else ""
