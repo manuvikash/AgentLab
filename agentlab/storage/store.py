@@ -6,7 +6,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import yaml
 from pydantic import BaseModel
@@ -15,12 +15,17 @@ from agentlab.models.schemas import (
     AgentConfig,
     ExperimentRecord,
     RunRecord,
+    SkillDocument,
     TaskConfig,
 )
+from agentlab.skills.parser import meta_name_description, parse_skill_md, skill_instruction_body
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
+
+# Max UTF-8 text returned by read_skill_bundle_file (UI preview).
+_MAX_SKILL_BUNDLE_FILE_BYTES = 512_000
 
 
 class Store:
@@ -33,6 +38,7 @@ class Store:
             runs/         # run directories (metrics.json, trace.json, config.yaml)
             experiments/  # experiment records
             tasks/        # task definitions
+            skills/       # skills/<id>/SKILL.md
     """
 
     def __init__(self, root: str | Path | None = None) -> None:
@@ -79,6 +85,169 @@ class Store:
             except Exception as exc:
                 logger.warning("Failed to load agent %s: %s", p, exc)
         return agents
+
+    # ------------------------------------------------------------------
+    # Skills (skills/<skill_id>/SKILL.md)
+    # ------------------------------------------------------------------
+
+    @property
+    def skills_dir(self) -> Path:
+        return self._root / "skills"
+
+    def _skill_id_ok(self, skill_id: str) -> bool:
+        if not skill_id or skill_id.strip() != skill_id:
+            return False
+        if "/" in skill_id or "\\" in skill_id or ".." in skill_id:
+            return False
+        return True
+
+    def skill_md_path(self, skill_id: str) -> Path:
+        if not self._skill_id_ok(skill_id):
+            raise ValueError(f"Invalid skill id: {skill_id!r}")
+        return self.skills_dir / skill_id / "SKILL.md"
+
+    def read_skill_raw(self, skill_id: str) -> str:
+        path = self.skill_md_path(skill_id)
+        if not path.exists():
+            raise FileNotFoundError(f"SKILL.md not found: {path}")
+        return path.read_text(encoding="utf-8")
+
+    def load_skill_name_description(self, skill_id: str) -> tuple[str, str]:
+        raw = self.read_skill_raw(skill_id)
+        meta, _body = parse_skill_md(raw)
+        name, desc = meta_name_description(meta)
+        if not name:
+            name = skill_id
+        return name, desc
+
+    def skill_instruction_for_tool(self, skill_id: str) -> str:
+        """Body of SKILL.md for LLM tool result (progressive disclosure)."""
+        raw = self.read_skill_raw(skill_id)
+        return skill_instruction_body(raw)
+
+    def list_skill_ids(self) -> list[str]:
+        if not self.skills_dir.exists():
+            return []
+        ids: list[str] = []
+        for d in sorted(self.skills_dir.iterdir()):
+            if d.is_dir() and (d / "SKILL.md").exists():
+                ids.append(d.name)
+        return ids
+
+    def load_skill_document(self, skill_id: str) -> SkillDocument:
+        raw = self.read_skill_raw(skill_id)
+        meta, body = parse_skill_md(raw)
+        name, desc = meta_name_description(meta)
+        return SkillDocument(
+            id=skill_id,
+            name=name or skill_id,
+            description=desc,
+            body=body,
+        )
+
+    def save_skill_document(self, doc: SkillDocument) -> Path:
+        if not self._skill_id_ok(doc.id):
+            raise ValueError(f"Invalid skill id: {doc.id!r}")
+        skill_dir = self.skills_dir / doc.id
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        fm = yaml.dump(
+            {"name": doc.name, "description": doc.description},
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+        ).strip()
+        text = f"---\n{fm}\n---\n{doc.body}"
+        path = skill_dir / "SKILL.md"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def delete_skill(self, skill_id: str) -> None:
+        skill_dir = self.skills_dir / skill_id
+        if not self._skill_id_ok(skill_id):
+            raise ValueError(f"Invalid skill id: {skill_id!r}")
+        if skill_dir.exists() and skill_dir.is_dir():
+            shutil.rmtree(skill_dir)
+
+    def _skill_bundle_root(self, skill_id: str) -> Path:
+        if not self._skill_id_ok(skill_id):
+            raise ValueError(f"Invalid skill id: {skill_id!r}")
+        root = (self.skills_dir / skill_id).resolve()
+        if not root.is_dir():
+            raise FileNotFoundError(f"Skill directory not found: {root}")
+        return root
+
+    def resolve_skill_bundle_path(self, skill_id: str, rel_path: str) -> Path:
+        """Resolve a path inside skills/<skill_id>/; rejects traversal outside."""
+        root = self._skill_bundle_root(skill_id)
+        rel = (rel_path or "").strip().replace("\\", "/")
+        if not rel or rel.startswith("/"):
+            raise ValueError("Invalid path")
+        if ".." in Path(rel).parts:
+            raise ValueError("Invalid path")
+        target = (root / rel).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            raise ValueError("Invalid path") from exc
+        return target
+
+    def skill_file_tree(self, skill_id: str) -> dict[str, Any]:
+        """Nested directory listing for UI (name, kind, path, size for files)."""
+        root = self._skill_bundle_root(skill_id)
+        return self._skill_file_tree_node(root, root)
+
+    def _skill_file_tree_node(self, path: Path, root: Path) -> dict[str, Any]:
+        rel = path.relative_to(root)
+        rel_str = "" if rel == Path(".") else str(rel).replace("\\", "/")
+        name = path.name if rel != Path(".") else root.name
+
+        if path.is_file():
+            return {
+                "path": rel_str,
+                "name": name,
+                "kind": "file",
+                "size": path.stat().st_size,
+            }
+
+        children: list[dict[str, Any]] = []
+        for child in sorted(
+            path.iterdir(),
+            key=lambda p: (not p.is_dir(), p.name.lower()),
+        ):
+            if child.name == "__pycache__":
+                continue
+            children.append(self._skill_file_tree_node(child, root))
+
+        return {
+            "path": rel_str,
+            "name": name,
+            "kind": "dir",
+            "children": children,
+        }
+
+    def read_skill_bundle_file(self, skill_id: str, rel_path: str) -> str:
+        """Read a UTF-8 text file under the skill bundle; raises if binary or too large."""
+        target = self.resolve_skill_bundle_path(skill_id, rel_path)
+        if not target.is_file():
+            raise FileNotFoundError(f"Not a file: {target}")
+        data = target.read_bytes()
+        if len(data) > _MAX_SKILL_BUNDLE_FILE_BYTES:
+            raise ValueError(
+                f"File too large to preview (max {_MAX_SKILL_BUNDLE_FILE_BYTES} bytes)"
+            )
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("File is not valid UTF-8 text") from exc
+
+    def list_skill_documents(self) -> list[SkillDocument]:
+        out: list[SkillDocument] = []
+        for sid in self.list_skill_ids():
+            try:
+                out.append(self.load_skill_document(sid))
+            except Exception as exc:
+                logger.warning("Failed to load skill %s: %s", sid, exc)
+        return out
 
     # ------------------------------------------------------------------
     # Runs

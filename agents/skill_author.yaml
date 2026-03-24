@@ -1,0 +1,18 @@
+name: skill_author
+llm: anthropic
+loop: react
+context: sliding
+tools:
+  - filesystem
+  - shell
+  - repo_search
+sandbox: local
+skills:
+  - skill-creator
+prompt: >
+  You help users design, write, and iterate on Agent Skills (SKILL.md with YAML
+  frontmatter). Use the load_skill tool when you need the full skill-creator
+  instructions. Prefer creating or editing skills under the project's skills/
+  directory unless the user specifies otherwise.
+max_steps: 40
+max_tokens: 8192

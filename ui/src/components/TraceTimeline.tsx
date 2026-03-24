@@ -41,7 +41,20 @@ function StepCard({ entry }: { entry: TraceEntry }) {
               <p className="text-sm text-amber-900 whitespace-pre-wrap">{entry.action}</p>
             </div>
           )}
-          {entry.tool_call && (
+          {entry.tool_call && entry.tool_call.tool === "load_skill" && (
+            <div className="bg-teal-50 rounded p-3 border border-teal-100">
+              <p className="text-xs font-medium text-teal-800 mb-1">
+                Skill loaded
+                {(entry.tool_call.skill_name || entry.tool_call.skill_id) && (
+                  <span className="font-semibold ml-1">
+                    — {entry.tool_call.skill_name || entry.tool_call.skill_id}
+                  </span>
+                )}
+              </p>
+              <pre className="text-xs text-teal-900 overflow-x-auto">{JSON.stringify(entry.tool_call.args, null, 2)}</pre>
+            </div>
+          )}
+          {entry.tool_call && entry.tool_call.tool !== "load_skill" && (
             <div className="bg-purple-50 rounded p-3">
               <p className="text-xs font-medium text-purple-700 mb-1">
                 Tool: {entry.tool_call.tool}

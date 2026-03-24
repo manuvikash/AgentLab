@@ -13,6 +13,9 @@ import ComponentsList from "./pages/ComponentsList";
 import TasksList from "./pages/TasksList";
 import TaskDetail from "./pages/TaskDetail";
 import TaskBuilder from "./pages/TaskBuilder";
+import SkillsList from "./pages/SkillsList";
+import SkillDetail from "./pages/SkillDetail";
+import SkillBuilder from "./pages/SkillBuilder";
 import Compare from "./pages/Compare";
 import Playground from "./pages/Playground";
 
@@ -35,6 +38,10 @@ export default function App() {
         <Route path="/tasks/new" element={<TaskBuilder />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/tasks/:id/edit" element={<TaskBuilder />} />
+        <Route path="/skills" element={<SkillsList />} />
+        <Route path="/skills/new" element={<SkillBuilder />} />
+        <Route path="/skills/:id" element={<SkillDetail />} />
+        <Route path="/skills/:id/edit" element={<SkillBuilder />} />
         <Route path="/compare" element={<Compare />} />
         <Route path="/playground" element={<Playground />} />
         <Route path="*" element={<Navigate to="/" replace />} />

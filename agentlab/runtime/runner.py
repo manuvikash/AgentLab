@@ -21,6 +21,7 @@ from agentlab.observability.phoenix_tracing import (
     set_span_error,
     set_span_ok,
 )
+from agentlab.skills.catalog import build_skill_catalog_suffix
 from agentlab.storage.store import Store
 
 logger = logging.getLogger(__name__)
@@ -79,10 +80,25 @@ class AgentRunner:
         loop = self._registry.create("loop", config.loop)
         context_mgr = self._registry.create("context", config.context)
         tools = [self._registry.create("tool", t) for t in config.tools]
+        if config.skills:
+            tools.append(
+                self._registry.create(
+                    "tool",
+                    "load_skill",
+                    store=self._store,
+                    allowed_skill_ids=list(config.skills),
+                )
+            )
         sandbox = self._registry.create("sandbox", config.sandbox, **sandbox_overrides)
         memory = (
             self._registry.create("memory", config.memory) if config.memory else None
         )
+
+        system_prompt = (config.prompt or "") + build_skill_catalog_suffix(
+            self._store, config.skills or []
+        )
+        if not system_prompt.strip():
+            system_prompt = None
 
         ctx = RuntimeContext(
             llm=llm,
@@ -90,9 +106,10 @@ class AgentRunner:
             tools=tools,
             sandbox=sandbox,
             memory=memory,
-            system_prompt=config.prompt,
+            system_prompt=system_prompt,
             max_steps=config.max_steps,
             max_tokens=config.max_tokens,
+            store=self._store,
         )
 
         prompt = task_prompt or config.prompt or "No task specified."

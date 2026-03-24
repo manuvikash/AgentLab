@@ -1,9 +1,26 @@
+export interface SkillDocument {
+  id: string;
+  name: string;
+  description: string;
+  body: string;
+}
+
+/** Nested bundle listing from GET /skills/:id/files */
+export interface SkillFileNode {
+  path: string;
+  name: string;
+  kind: "file" | "dir";
+  size?: number;
+  children?: SkillFileNode[];
+}
+
 export interface AgentConfig {
   name: string;
   llm: string;
   loop: string;
   context: string;
   tools: string[];
+  skills?: string[];
   sandbox: string;
   prompt: string | null;
   memory: string | null;
@@ -16,6 +33,8 @@ export interface ToolCallRecord {
   args: Record<string, unknown>;
   result: string | null;
   duration_ms: number | null;
+  skill_id: string | null;
+  skill_name: string | null;
 }
 
 export interface TraceEntry {

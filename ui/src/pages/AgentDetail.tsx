@@ -62,6 +62,7 @@ export default function AgentDetail() {
           { label: "Max Steps", value: agent.max_steps },
           { label: "Max Tokens", value: agent.max_tokens },
           { label: "Tools", value: agent.tools.join(", ") || "—" },
+          { label: "Skills", value: (agent.skills || []).join(", ") || "—" },
         ].map((item) => (
           <div key={item.label} className="bg-white border border-gray-200 rounded-lg p-4">
             <dt className="text-xs text-gray-500 font-medium uppercase tracking-wider">{item.label}</dt>

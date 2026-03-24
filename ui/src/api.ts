@@ -35,6 +35,18 @@ export const api = {
     run: (id: string) => request<Record<string, unknown>>(`/experiments/${id}/run`, { method: "POST" }),
     delete: (id: string) => request(`/experiments/${id}`, { method: "DELETE" }),
   },
+  skills: {
+    list: () => request<Record<string, unknown>[]>("/skills"),
+    get: (id: string) => request<Record<string, unknown>>(`/skills/${id}`),
+    fileTree: (id: string) => request<Record<string, unknown>>(`/skills/${id}/files`),
+    fileContent: (id: string, filePath: string) =>
+      request<{ path: string; content: string }>(
+        `/skills/${id}/file?file_path=${encodeURIComponent(filePath)}`
+      ),
+    create: (data: unknown) => request<Record<string, unknown>>("/skills", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: string, data: unknown) => request(`/skills/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    delete: (id: string) => request(`/skills/${id}`, { method: "DELETE" }),
+  },
   tasks: {
     list: () => request<Record<string, unknown>[]>("/tasks"),
     get: (id: string) => request<Record<string, unknown>>(`/tasks/${id}`),

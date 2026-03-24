@@ -20,16 +20,36 @@ export default function AgentBuilder() {
     max_steps: 10,
     max_tokens: 4096,
     tools: [] as string[],
+    skills: [] as string[],
   });
 
   const [toolOptions, setToolOptions] = useState<{ value: string; label: string }[]>([]);
+  const [skillOptions, setSkillOptions] = useState<{ value: string; label: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.components
       .byType("tool")
       .then((items) =>
-        setToolOptions(items.map((c) => ({ value: String(c.name), label: String(c.name) })))
+        setToolOptions(
+          items
+            .filter((c) => String(c.name) !== "load_skill")
+            .map((c) => ({ value: String(c.name), label: String(c.name) }))
+        )
+      )
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.skills
+      .list()
+      .then((items) =>
+        setSkillOptions(
+          items.map((s) => ({
+            value: String(s.id),
+            label: `${String(s.id)} — ${String(s.name || s.id)}`,
+          }))
+        )
       )
       .catch(() => {});
   }, []);
@@ -51,6 +71,7 @@ export default function AgentBuilder() {
           max_steps: Number(a.max_steps || 10),
           max_tokens: Number(a.max_tokens || 4096),
           tools: Array.isArray(a.tools) ? (a.tools as string[]) : [],
+          skills: Array.isArray(a.skills) ? (a.skills as string[]) : [],
         });
       })
       .catch(() => {});
@@ -62,6 +83,7 @@ export default function AgentBuilder() {
       ...form,
       memory: form.memory || null,
       prompt: form.prompt || null,
+      skills: form.skills,
     };
     try {
       if (isEdit) {
@@ -110,6 +132,14 @@ export default function AgentBuilder() {
           value={form.tools}
           onChange={(val) => setForm((f) => ({ ...f, tools: val }))}
           options={toolOptions}
+        />
+
+        <FormField
+          label="Skills (catalog + load_skill)"
+          type="multi-select"
+          value={form.skills}
+          onChange={(val) => setForm((f) => ({ ...f, skills: val }))}
+          options={skillOptions}
         />
 
         <FormField label="System Prompt" type="textarea" value={form.prompt} onChange={set("prompt")} placeholder="You are a helpful agent..." />

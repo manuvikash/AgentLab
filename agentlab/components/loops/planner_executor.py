@@ -29,7 +29,8 @@ from typing import Any
 
 from agentlab.core.component import BaseLoop, LoopResult, RuntimeContext, ToolResult
 from agentlab.core.registry import register
-from agentlab.models.schemas import Message, ToolCallRecord, TraceEntry
+from agentlab.models.schemas import Message, TraceEntry
+from agentlab.skills.trace import enrich_tool_call_record
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +195,11 @@ class PlannerExecutorLoop(BaseLoop):
                             step=global_step,
                             thought=thought,
                             action=f"step_{step_idx}:tool:{tc.name}",
-                            tool_call=ToolCallRecord(
-                                tool=tc.name,
-                                args=tc.arguments,
-                                result=tool_result.output,
+                            tool_call=enrich_tool_call_record(
+                                tc.name,
+                                tc.arguments,
+                                tool_result.output,
+                                store=ctx.store,
                             ),
                             result=tool_result.output,
                         ).model_dump()

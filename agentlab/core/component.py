@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from agentlab.models.schemas import (
     LLMResponse,
     Message,
     ToolSpec,
 )
+
+if TYPE_CHECKING:
+    from agentlab.storage.store import Store
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +57,7 @@ class RuntimeContext:
         system_prompt: str | None = None,
         max_steps: int = 30,
         max_tokens: int = 4096,
+        store: "Store | None" = None,
     ) -> None:
         self.llm = llm
         self.context_manager = context_manager
@@ -63,6 +67,7 @@ class RuntimeContext:
         self.system_prompt = system_prompt
         self.max_steps = max_steps
         self.max_tokens = max_tokens
+        self.store = store
 
 
 class BaseLoop(ABC):

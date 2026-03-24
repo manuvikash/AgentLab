@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any
 
 from agentlab.core.component import BaseLoop, LoopResult, RuntimeContext, ToolResult
 from agentlab.core.registry import register
-from agentlab.models.schemas import Message, TraceEntry, ToolCallRecord
+from agentlab.models.schemas import Message, TraceEntry
+from agentlab.skills.trace import enrich_tool_call_record
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +89,11 @@ class ReActLoop(BaseLoop):
                     step=step,
                     thought=thought,
                     action=f"tool:{tc.name}",
-                    tool_call=ToolCallRecord(
-                        tool=tc.name,
-                        args=tc.arguments,
-                        result=tool_result.output,
+                    tool_call=enrich_tool_call_record(
+                        tc.name,
+                        tc.arguments,
+                        tool_result.output,
+                        store=ctx.store,
                     ),
                     result=tool_result.output,
                 )

@@ -44,8 +44,9 @@ from agentlab.models.schemas import (
     ConversationRecord,
     Message,
     TraceEntry,
-    ToolCallRecord,
 )
+from agentlab.skills.catalog import build_skill_catalog_suffix
+from agentlab.skills.trace import enrich_tool_call_record
 from agentlab.storage.conversation_store import ConversationStore
 
 logger = logging.getLogger(__name__)
@@ -205,9 +206,21 @@ async def _run_turn(
         except FileNotFoundError:
             pass
     try:
+        from agentlab.api.routes import get_store as get_file_store
+
+        file_store = get_file_store()
         llm = registry.create("llm", agent_config.llm)
         context_mgr = registry.create("context", agent_config.context)
         tools_list = [registry.create("tool", t) for t in agent_config.tools]
+        if agent_config.skills:
+            tools_list.append(
+                registry.create(
+                    "tool",
+                    "load_skill",
+                    store=file_store,
+                    allowed_skill_ids=list(agent_config.skills),
+                )
+            )
         sandbox = registry.create("sandbox", agent_config.sandbox, **sandbox_kw)
         memory = (
             registry.create("memory", agent_config.memory)
@@ -219,20 +232,26 @@ async def _run_turn(
         yield _sse({"event": "done"})
         return
 
+    full_system = (agent_config.prompt or "") + build_skill_catalog_suffix(
+        file_store, agent_config.skills or []
+    )
+    system_prompt = full_system if full_system.strip() else None
+
     ctx = RuntimeContext(
         llm=llm,
         context_manager=context_mgr,
         tools=tools_list,
         sandbox=sandbox,
         memory=memory,
-        system_prompt=agent_config.prompt,
+        system_prompt=system_prompt,
         max_steps=agent_config.max_steps,
         max_tokens=agent_config.max_tokens,
+        store=file_store,
     )
 
     # 3. Replay conversation history into the context manager
-    if agent_config.prompt:
-        ctx.context_manager.add(Message(role="system", content=agent_config.prompt))
+    if full_system.strip():
+        ctx.context_manager.add(Message(role="system", content=full_system))
 
     for msg in history:
         ctx.context_manager.add(Message(role=msg.role, content=msg.content or ""))
@@ -348,10 +367,11 @@ async def _run_turn(
                             step=step,
                             thought=thought,
                             action=f"tool:{tc.name}",
-                            tool_call=ToolCallRecord(
-                                tool=tc.name,
-                                args=tc.arguments,
-                                result=result.output,
+                            tool_call=enrich_tool_call_record(
+                                tc.name,
+                                tc.arguments,
+                                result.output,
+                                store=file_store,
                             ),
                             result=result.output,
                         )

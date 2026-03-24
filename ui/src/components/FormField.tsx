@@ -11,6 +11,9 @@ interface InputProps extends BaseProps {
   value: string | number;
   onChange: (val: string) => void;
   placeholder?: string;
+  disabled?: boolean;
+  /** Only used when type is textarea */
+  rows?: number;
 }
 
 interface SelectProps extends BaseProps {
@@ -43,8 +46,9 @@ export default function FormField(props: Props) {
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
         placeholder={props.placeholder}
-        rows={4}
-        className={inputCls}
+        rows={props.type === "textarea" ? (props.rows ?? 4) : 4}
+        disabled={"disabled" in props ? props.disabled : false}
+        className={`${inputCls} disabled:bg-gray-100 disabled:text-gray-600`}
       />
     );
   } else if (props.type === "select") {
@@ -100,7 +104,8 @@ export default function FormField(props: Props) {
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
         placeholder={props.placeholder}
-        className={inputCls}
+        disabled={"disabled" in props ? props.disabled : false}
+        className={`${inputCls} disabled:bg-gray-100 disabled:text-gray-600`}
       />
     );
   }

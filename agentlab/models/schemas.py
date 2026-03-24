@@ -30,6 +30,7 @@ class AgentConfig(BaseModel):
     loop: str = "react"
     context: str = "sliding"
     tools: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
     sandbox: str = "local"
     prompt: str | None = None
     memory: str | None = None
@@ -47,6 +48,22 @@ class ToolCallRecord(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
     result: str | None = None
     duration_ms: float | None = None
+    skill_id: str | None = None
+    skill_name: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Skills (SKILL.md under skills/<id>/)
+# ---------------------------------------------------------------------------
+
+
+class SkillDocument(BaseModel):
+    """Skill metadata + body for API and authoring."""
+
+    id: str
+    name: str = ""
+    description: str = ""
+    body: str = ""
 
 
 class TraceEntry(BaseModel):

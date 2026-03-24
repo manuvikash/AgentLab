@@ -6,7 +6,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ from agentlab.models.schemas import (
     AgentConfig,
     ExperimentConfig,
     ExperimentRecord,
+    SkillDocument,
     TaskConfig,
 )
 from agentlab.storage.store import Store
@@ -73,6 +74,65 @@ def update_agent(name: str, config: AgentConfig):
 @router.delete("/agents/{name}", status_code=204)
 def delete_agent(name: str):
     get_store().delete_agent(name)
+
+
+# ---- Skills ----
+
+
+@router.get("/skills")
+def list_skills():
+    return [d.model_dump() for d in get_store().list_skill_documents()]
+
+
+@router.get("/skills/{skill_id}/files")
+def get_skill_files(skill_id: str):
+    store = get_store()
+    try:
+        return store.skill_file_tree(skill_id)
+    except FileNotFoundError:
+        raise HTTPException(404, f"Skill '{skill_id}' not found")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/skills/{skill_id}/file")
+def get_skill_bundle_file(skill_id: str, file_path: str = Query(..., min_length=1)):
+    store = get_store()
+    try:
+        content = store.read_skill_bundle_file(skill_id, file_path)
+        return {"path": file_path.replace("\\", "/"), "content": content}
+    except FileNotFoundError:
+        raise HTTPException(404, "File not found")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/skills/{skill_id}")
+def get_skill(skill_id: str):
+    try:
+        return get_store().load_skill_document(skill_id).model_dump()
+    except FileNotFoundError:
+        raise HTTPException(404, f"Skill '{skill_id}' not found")
+
+
+@router.post("/skills", status_code=201)
+def create_skill(doc: SkillDocument):
+    get_store().save_skill_document(doc)
+    return doc.model_dump()
+
+
+@router.put("/skills/{skill_id}")
+def update_skill(skill_id: str, doc: SkillDocument):
+    store = get_store()
+    if skill_id != doc.id:
+        store.delete_skill(skill_id)
+    store.save_skill_document(doc)
+    return doc.model_dump()
+
+
+@router.delete("/skills/{skill_id}", status_code=204)
+def delete_skill_route(skill_id: str):
+    get_store().delete_skill(skill_id)
 
 
 # ---- Runs ----
