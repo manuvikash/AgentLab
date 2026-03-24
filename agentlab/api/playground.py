@@ -13,7 +13,7 @@ SSE event format (``data: <json>\\n\\n``)
 {"event": "thinking",     "step": N, "content": "..."}
 {"event": "tool_call",    "step": N, "tool": "...", "args": {...}}
 {"event": "tool_result",  "step": N, "tool": "...", "result": "..."}
-{"event": "final",        "content": "...", "message_id": <int>}
+{"event": "final",        "content": "...", "message_id": <int>, "llm_spans": [...]}
 {"event": "error",        "message": "..."}
 {"event": "done"}
 """
@@ -26,6 +26,11 @@ from asyncio import CancelledError
 from typing import AsyncGenerator
 
 import agentlab.components  # noqa: F401 — trigger auto-registration
+from agentlab.components.llms.serialize import (
+    build_llm_request_trace,
+    ensure_span_payload_fits,
+    llm_response_to_trace_dict,
+)
 from agentlab.components.sandboxes.docker_sandbox import DockerSandbox
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -35,6 +40,7 @@ from agentlab.core.component import RuntimeContext, ToolResult
 from agentlab.core.registry import get_registry
 from agentlab.observability.phoenix_tracing import (
     agent_parent_span,
+    llm_invoke_span,
     set_span_error,
     set_span_ok,
 )
@@ -42,6 +48,7 @@ from agentlab.models.schemas import (
     AgentConfig,
     ConversationMessage,
     ConversationRecord,
+    LlmCallSpan,
     Message,
     TraceEntry,
 )
@@ -261,6 +268,7 @@ async def _run_turn(
     tool_specs = [t.to_spec() for t in ctx.tools.values()]
     tools_map = ctx.tools
     trace_entries: list[TraceEntry] = []
+    llm_spans: list[LlmCallSpan] = []
 
     # 4. Start sandbox with SSE lifecycle events, then run the ReAct loop
     is_docker = isinstance(sandbox, DockerSandbox)
@@ -304,7 +312,35 @@ async def _run_turn(
                     messages = ctx.context_manager.get_messages(
                         max_tokens=agent_config.max_tokens
                     )
-                    response = await ctx.llm.generate(messages, tools=tool_specs or None)
+                    request_raw = build_llm_request_trace(
+                        ctx.llm, messages, tool_specs or None
+                    )
+                    llm_span_attrs = {
+                        "agentlab.conversation_id": conv_id,
+                        "agentlab.call_index": str(step),
+                        "agentlab.model": ctx.llm.model_name,
+                    }
+                    with llm_invoke_span(
+                        "agentlab.llm.generate",
+                        input_value=json.dumps(request_raw, default=str),
+                        attributes=llm_span_attrs,
+                    ) as inner_span:
+                        response = await ctx.llm.generate(
+                            messages, tools=tool_specs or None
+                        )
+                        resp_dict = llm_response_to_trace_dict(response)
+                        req_fit, resp_fit = ensure_span_payload_fits(
+                            request_raw, resp_dict
+                        )
+                        set_span_ok(inner_span, json.dumps(resp_fit, default=str))
+                    llm_spans.append(
+                        LlmCallSpan(
+                            call_index=step,
+                            model=ctx.llm.model_name,
+                            request=req_fit,
+                            response=resp_fit,
+                        )
+                    )
 
                     if not response.tool_calls:
                         # Final answer
@@ -313,6 +349,7 @@ async def _run_turn(
                             thought=response.content,
                             action="final_answer",
                             result=response.content,
+                            token_usage=response.usage,
                         )
                         trace_entries.append(entry)
                         ctx.context_manager.add(
@@ -374,6 +411,7 @@ async def _run_turn(
                                 store=file_store,
                             ),
                             result=result.output,
+                            token_usage=response.usage,
                         )
                         trace_entries.append(entry)
 
@@ -422,6 +460,7 @@ async def _run_turn(
         role="assistant",
         content=final_content,
         trace=[e.model_dump(mode="json") for e in trace_entries],
+        llm_spans=llm_spans,
     )
     store.add_message(assistant_msg)
 
@@ -430,6 +469,7 @@ async def _run_turn(
             "event": "final",
             "content": final_content,
             "message_id": assistant_msg.id,
+            "llm_spans": [s.model_dump(mode="json") for s in llm_spans],
         }
     )
     yield _sse({"event": "done"})

@@ -79,6 +79,40 @@ def agent_parent_span(
         yield span
 
 
+@contextmanager
+def llm_invoke_span(
+    span_name: str,
+    *,
+    input_value: str = "",
+    attributes: dict[str, Any] | None = None,
+) -> Generator[Any, None, None]:
+    """OpenInference LLM child span under the current OpenTelemetry context."""
+    if not is_phoenix_tracing_requested():
+        yield None
+        return
+    ensure_phoenix_tracing()
+    if not _registered:
+        yield None
+        return
+
+    from opentelemetry import trace
+    from openinference.semconv.trace import SpanAttributes
+
+    tracer = trace.get_tracer("agentlab")
+    attrs: dict[str, Any] = {
+        SpanAttributes.OPENINFERENCE_SPAN_KIND: "LLM",
+    }
+    if input_value:
+        attrs[SpanAttributes.INPUT_VALUE] = _clip(input_value)
+    if attributes:
+        for k, v in attributes.items():
+            if v is not None:
+                attrs[k] = v
+
+    with tracer.start_as_current_span(span_name, attributes=attrs) as span:
+        yield span
+
+
 def set_span_ok(span: Any, output_value: str | None = None) -> None:
     if span is None:
         return

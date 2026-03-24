@@ -69,6 +69,7 @@ To trace LLM calls and group each agent run under an OpenInference **AGENT** spa
 2. Set environment variables (see `example.env`):
    - `AGENTLAB_PHOENIX_TRACING=1`
    - `PHOENIX_COLLECTOR_ENDPOINT` — your Phoenix OTLP endpoint (often `http://localhost:6006` for local Phoenix)
+3. For self hosted, use `phoenix serve` to start the phoenix server
 
 Tracing is initialized when you run `lab ui`, or when you run `lab run`, `lab experiment run`, or `lab eval` from the CLI. Open the Phoenix UI to browse traces.
 

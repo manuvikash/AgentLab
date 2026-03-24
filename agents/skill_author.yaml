@@ -1,18 +1,20 @@
 name: skill_author
-llm: anthropic
+llm: openai
 loop: react
 context: sliding
 tools:
-  - filesystem
-  - shell
-  - repo_search
-sandbox: local
+- filesystem
+- shell
+- repo_search
 skills:
-  - skill-creator
-prompt: >
-  You help users design, write, and iterate on Agent Skills (SKILL.md with YAML
-  frontmatter). Use the load_skill tool when you need the full skill-creator
-  instructions. Prefer creating or editing skills under the project's skills/
-  directory unless the user specifies otherwise.
+- skill-creator
+sandbox: local
+prompt: 'You help users design, write, and iterate on Agent Skills (SKILL.md with
+  YAML frontmatter). Use the load_skill tool when you need the full skill-creator
+  instructions. Prefer creating or editing skills under the project''s skills/ directory
+  unless the user specifies otherwise.
+
+  '
+memory: null
 max_steps: 40
 max_tokens: 8192

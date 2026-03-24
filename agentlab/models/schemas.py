@@ -183,6 +183,17 @@ class LLMToolCall(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
+class LlmCallSpan(BaseModel):
+    """One LLM API round-trip (exact adapter request + response) for playground tracing."""
+
+    call_index: int
+    model: str
+    # JSON-serializable payload matching what the provider adapter sends (OpenAI / Anthropic).
+    request: dict[str, Any] = Field(default_factory=dict)
+    response: dict[str, Any] | None = None
+    error: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Playground conversations
 # ---------------------------------------------------------------------------
@@ -210,4 +221,6 @@ class ConversationMessage(BaseModel):
     content: str | None = None
     # Serialised list of TraceEntry dicts (tool calls, thoughts) for assistant turns.
     trace: list[dict[str, Any]] = Field(default_factory=list)
+    # Per-llm.generate() request/response snapshots for assistant turns.
+    llm_spans: list[LlmCallSpan] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_utcnow)

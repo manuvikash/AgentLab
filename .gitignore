@@ -39,6 +39,8 @@ wheels/
 # PatchPilot
 data/
 *.db
+*.db-wal
+*.db-shm
 /tmp/
 .patchpilot-workspaces/
 

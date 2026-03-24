@@ -1,0 +1,15 @@
+name: skill maxer
+llm: openai
+loop: react
+context: simple
+tools:
+- shell
+- filesystem
+- repo_search
+skills:
+- skill-creator
+sandbox: docker
+prompt: you are an agent that specializes in creating skills for other agents
+memory: compaction
+max_steps: 10
+max_tokens: 4096

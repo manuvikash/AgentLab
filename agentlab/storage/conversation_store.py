@@ -19,6 +19,7 @@ messages
     role            TEXT     NOT NULL   ('user' | 'assistant')
     content         TEXT
     trace           TEXT     (JSON list of TraceEntry dicts)
+    llm_spans       TEXT     (JSON list of LlmCallSpan dicts)
     created_at      TEXT
 """
 
@@ -34,6 +35,7 @@ from agentlab.models.schemas import (
     AgentConfig,
     ConversationMessage,
     ConversationRecord,
+    LlmCallSpan,
 )
 
 _DDL = """
@@ -105,6 +107,15 @@ class ConversationStore:
                     conn.execute("ALTER TABLE conversations ADD COLUMN task_id TEXT")
             except Exception:
                 pass
+            try:
+                cursor = conn.execute("PRAGMA table_info(messages)")
+                msg_columns = [row[1] for row in cursor.fetchall()]
+                if "llm_spans" not in msg_columns:
+                    conn.execute(
+                        "ALTER TABLE messages ADD COLUMN llm_spans TEXT DEFAULT '[]'"
+                    )
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Conversations
@@ -168,11 +179,23 @@ class ConversationStore:
     def add_message(self, msg: ConversationMessage) -> ConversationMessage:
         now = _utcnow_iso()
         trace_json = json.dumps(msg.trace)
+        llm_spans_json = json.dumps(
+            [s.model_dump(mode="json") for s in msg.llm_spans],
+            default=str,
+        )
         with self._connect() as conn:
             cur = conn.execute(
-                "INSERT INTO messages (conversation_id, seq, role, content, trace, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (msg.conversation_id, msg.seq, msg.role, msg.content, trace_json, now),
+                "INSERT INTO messages (conversation_id, seq, role, content, trace, llm_spans, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    msg.conversation_id,
+                    msg.seq,
+                    msg.role,
+                    msg.content,
+                    trace_json,
+                    llm_spans_json,
+                    now,
+                ),
             )
             msg.id = cur.lastrowid
         msg.created_at = datetime.fromisoformat(now)
@@ -226,6 +249,15 @@ class ConversationStore:
                 trace = json.loads(row["trace"])
             except Exception:
                 pass
+        llm_spans: list[LlmCallSpan] = []
+        raw_llm = row["llm_spans"] if "llm_spans" in row.keys() else None
+        if raw_llm:
+            try:
+                data = json.loads(raw_llm)
+                if isinstance(data, list):
+                    llm_spans = [LlmCallSpan.model_validate(x) for x in data]
+            except Exception:
+                pass
         return ConversationMessage(
             id=row["id"],
             conversation_id=row["conversation_id"],
@@ -233,5 +265,6 @@ class ConversationStore:
             role=row["role"],
             content=row["content"],
             trace=trace,
+            llm_spans=llm_spans,
             created_at=datetime.fromisoformat(row["created_at"]),
         )

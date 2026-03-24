@@ -16,12 +16,21 @@ interface ConvRecord {
   updated_at: string;
 }
 
+interface LlmCallSpan {
+  call_index: number;
+  model: string;
+  request: Record<string, unknown>;
+  response: Record<string, unknown> | null;
+  error?: string | null;
+}
+
 interface ConvMessage {
   id: number | null;
   seq: number;
   role: "user" | "assistant";
   content: string | null;
   trace: TraceEntry[];
+  llm_spans?: LlmCallSpan[];
   created_at: string;
 }
 
@@ -301,9 +310,77 @@ function StreamingBubble({ state }: { state: StreamingState }) {
   );
 }
 
+function LlmSpansPanel({ spans }: { spans: LlmCallSpan[] }) {
+  return (
+    <div className="mb-2 space-y-2 border border-gray-200 rounded-lg bg-gray-50/80 p-2">
+      <p className="text-xs font-semibold text-gray-600 px-1">LLM calls</p>
+      {spans.map((span, i) => (
+        <LlmSpanCard key={`${span.call_index}-${i}`} span={span} />
+      ))}
+    </div>
+  );
+}
+
+function LlmSpanCard({ span }: { span: LlmCallSpan }) {
+  const [open, setOpen] = useState(false);
+  const usage = span.response?.usage as
+    | { input_tokens?: number; output_tokens?: number }
+    | undefined;
+  const tok =
+    usage &&
+    typeof usage.input_tokens === "number" &&
+    typeof usage.output_tokens === "number"
+      ? `${usage.input_tokens} in / ${usage.output_tokens} out`
+      : null;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-md overflow-hidden text-left">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-50"
+      >
+        <span className="font-medium text-gray-800">
+          Call {span.call_index} · {span.model}
+        </span>
+        <span className="text-gray-500 flex items-center gap-2">
+          {tok && <span>{tok}</span>}
+          <span>{open ? "▾" : "▸"}</span>
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-gray-100 px-3 py-2 space-y-2 max-h-[min(70vh,480px)] overflow-auto">
+          {span.error && (
+            <div className="text-xs text-red-600 whitespace-pre-wrap">{span.error}</div>
+          )}
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
+              Request
+            </p>
+            <pre className="text-[11px] leading-snug bg-slate-900 text-slate-100 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+              {JSON.stringify(span.request, null, 2)}
+            </pre>
+          </div>
+          {span.response != null && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                Response
+              </p>
+              <pre className="text-[11px] leading-snug bg-emerald-950 text-emerald-50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+                {JSON.stringify(span.response, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MessageBubble({ msg }: { msg: ConvMessage }) {
   const isUser = msg.role === "user";
   const toolEntries = (msg.trace || []).filter((t) => t.tool_call !== null);
+  const llmSpans = msg.llm_spans ?? [];
 
   if (isUser) {
     return (
@@ -321,6 +398,7 @@ function MessageBubble({ msg }: { msg: ConvMessage }) {
         A
       </div>
       <div className="flex-1 max-w-2xl">
+        {llmSpans.length > 0 && <LlmSpansPanel spans={llmSpans} />}
         {toolEntries.length > 0 && (
           <div className="mb-2">
             {toolEntries.map((e, i) => (
